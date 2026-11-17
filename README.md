@@ -1,19 +1,9 @@
-# Fable.Lit.Dsl
-[![Fable.Lit.Dsl](https://img.shields.io/nuget/v/Fable.Lit.Dsl.svg?label=Fable.Lit.Dsl)](https://www.nuget.org/packages/Fable.Lit.Dsl/)
-[![Fable.Lit.Dsl.Shoelace](https://img.shields.io/nuget/v/Fable.Lit.Dsl.Shoelace.svg?label=Fable.Lit.Dsl.Shoelace)](https://www.nuget.org/packages/Fable.Lit.Dsl.Shoelace/)
+# Firelight.Html
 
-A collection of expressive, type-safe DSLs for building UI with **Fable.Lit**.
-This repo currently includes:
-
-- **Fable.Lit.Dsl** - a clean, idiomatic way to write Lit templates in F#
-- **Fable.Lit.Dsl.Shoelace** - typed components, attributes, and events for the Shoelace Web Component library
-
-More DSLs may be added over time.
+A collection of expressive, type-safe DSLs for building UI with **Firelight**.
 
 ### Related Projects
-- **Fable.Lit** - core F# bindings for Lit: https://github.com/fable-hub/Fable.Lit
-- **fable-lit-template** - Fable.Lit + Giraffe: https://github.com/JordanMarr/fable-lit-fullstack-template
-
+- **Fable.Lit.Dsl** - Project this project is based on: https://github.com/JordanMarr/Fable.Lit.Dsl
 ---
 
 ## Installation
@@ -21,28 +11,8 @@ More DSLs may be added over time.
 Add the packages to your project:
 
 ```bash
-dotnet add package Fable.Lit.Dsl
-dotnet add package Fable.Lit.Dsl.Shoelace
+dotnet add package DavidWhelan.Firelight.Html
 ```
-
-If using Shoelace, register its assets at app startup:
-
-```fsharp
-open Fable.Core.JsInterop
-open Fable.Lit.Dsl.Shoelace
-
-// Set the base path for Shoelace assets (icons, etc.)
-Shoelace.setBasePath()
-
-// Import the components you need
-Shoelace.startImports [|
-    importDynamic Shoelace.Asset.Button
-    importDynamic Shoelace.Asset.Input
-    importDynamic Shoelace.Asset.Dialog
-    // ... add more as needed
-|]
-```
-
 ---
 
 # HTML DSL
@@ -52,7 +22,7 @@ The HTML DSL provides a natural, structured way to write Lit templates in F# wit
 ### Example
 
 ```fsharp
-open Fable.Lit.Dsl
+open Firelight.Html
 
 view {
     h1 { "Hello, world!" }
@@ -130,161 +100,6 @@ In most cases, wrapping content in a `div` is fine. Use `template` only when an 
 
 ---
 
-# Shoelace DSL
-
-Typed, ergonomic bindings for the Shoelace Web Component library.
-
-### Example
-
-```fsharp
-open Fable.Lit.Dsl
-open Fable.Lit.Dsl.Shoelace
-
-[<HookComponent>]
-let Page() =
-    let dialog = Dialog.createRef()
-
-    view {
-        slButton {
-            variantPrimary
-            onClick (fun _ -> Dialog.show dialog)
-            slIcon { slot' "prefix"; iconName "box-arrow-up-right" }
-            "Open Dialog"
-        }
-    
-        slDialog {
-            Dialog.bind dialog
-            label' "Confirmation"
-
-            p { "Are you sure you want to proceed with this action?" }
-
-            div {
-                slot' "footer"
-                style "display: flex; gap: 10px; justify-content: flex-end;"
-
-                slButton {
-                    variantDefault
-                    onClick (fun _ -> Dialog.hide dialog)
-                    "Cancel"
-                }
-                slButton {
-                    variantPrimary
-                    onClick (fun _ ->
-                        setConfirmCount (confirmCount + 1)
-                        Dialog.hide dialog
-                    )
-                    "Confirm"
-                }
-            }
-        }
-    }
-```
-
-### Highlights
-
-- All Shoelace components supported (`slButton`, `slInput`, `slDialog`, `slDrawer`, etc.)
-- Typed properties (`variant`, `size`, `disabled'`, `open'`, `label'`, etc.)
-- Typed events (`onSlChange`, `onSlInput`, `onSlShow`, `onSlHide`, etc.)
-- Works alongside the HTML DSL
-
-### Common Shoelace Properties
-
-```fsharp
-// Variants
-variantPrimary      // or: variant "primary"
-variantSuccess
-variantDanger
-variantWarning
-variantNeutral
-
-// Sizes
-sizeSmall           // or: size "small"
-sizeMedium
-sizeLarge
-
-// States
-disabled' true
-loading true
-open' true
-checked' true
-clearable true
-
-// Values
-value' "text"
-label' "Label"
-placeholder' "Placeholder"
-helpText "Help text"
-```
-
-### Common Shoelace Events
-
-```fsharp
-onSlChange handler      // Value changed (after interaction)
-onSlInput handler       // Real-time input
-onSlShow handler        // Element starting to show
-onSlAfterShow handler   // Element shown, animations complete
-onSlHide handler        // Element starting to hide
-onSlAfterHide handler   // Element hidden, animations complete
-onSlRequestClose handler // Close requested (dialogs/drawers)
-onSlSelect handler      // Menu item selected
-```
-
----
-
-# Extensibility: Build Your Own DSL
-
-The DSL system is intentionally modular.
-You can create your own DSL for any Web Component library.
-
-### Minimal Example
-
-```fsharp
-module MyComponents
-
-open Fable.Lit.Dsl
-
-// Define elements for your web components
-let fancyCard = ElementBuilder("fancy-card")
-let fancyButton = ElementBuilder("fancy-button")
-
-// Define typed properties
-let cardTitle (text: string) = prop "cardTitle" text
-let elevation (level: int) = prop "elevation" level
-
-// Define typed events
-let onFancyClick (handler: obj -> unit) : Attr = Event("fancy-click", handler)
-```
-
-Usage:
-
-```fsharp
-open MyComponents
-
-view {
-    fancyCard {
-        cardTitle "Welcome"
-        elevation 2
-
-        fancyButton {
-            onFancyClick (fun _ -> dispatch Click)
-            "Click me"
-        }
-    }
-}
-```
-
-You can extend:
-
-- Components (using `ElementBuilder`)
-- Attributes (using `attr`)
-- Properties (using `prop`)
-- Events (using `Event`)
-- Boolean attributes (using `boolAttr`)
-
-This repo models the pattern used by the HTML and Shoelace DSLs.
-
----
-
 # More Examples
 
 ### Conditional Rendering
@@ -294,7 +109,9 @@ view {
     h2 { "Dashboard" }
 
     if model.IsLoading then
-        slSpinner { }
+        div {
+            p { "Loading" }
+        }
     else
         div {
             p { $"Welcome, {model.Username}!" }
@@ -325,83 +142,20 @@ view {
 }
 ```
 
-### Mixing HTML and Shoelace
-
-```fsharp
-view {
-    header {
-        class' "app-header"
-        h1 { "My App" }
-    }
-
-    main {
-        slCard {
-            div {
-                slot' "header"
-                h3 { "Stats" }
-            }
-            p { $"Count: {model.Count}" }
-
-            div {
-                slot' "footer"
-                slButton {
-                    variantPrimary
-                    onClick (fun _ -> dispatch Increment)
-                    "Increment"
-                }
-            }
-        }
-    }
-}
-```
-
 ### Using Refs
 
 ```fsharp
 let inputRef = ref Unchecked.defaultof<Browser.Types.HTMLInputElement>
 
 view {
-    slInput {
+    input {
         bindRef (fun el -> inputRef.Value <- el :?> _)
         label' "Focus me"
     }
 
-    slButton {
+    button {
         onClick (fun _ -> inputRef.Value.focus())
         "Focus Input"
     }
 }
 ```
-
-### Embedding Raw Lit Templates
-
-```fsharp
-open Lit
-
-view {
-    h1 { "Mixed Content" }
-
-    // Embed an existing Lit template
-    lit (html $"<p>Raw Lit template</p>")
-
-    // Or raw HTML (use sparingly)
-    rawHtml "<p>Raw HTML string</p>"
-}
-```
-
----
-
-## Roadmap
-
-The DSL system is intentionally modular, and this repo may grow over time as more UI libraries adopt Web Components.
-
-### Potential Future DSLs
-- **FluentUI DSL** - Microsoft's Fluent Web Components
-- **FAST DSL** - FAST's design tokens and component model
-- **Material Web DSL** - Google's Material Web Components
-- **Community DSLs** - Anyone can build a DSL package for their preferred component library
-
-### Future Improvements
-- Additional typed attributes and events
-- Expanded examples and documentation
-- Potential integration with design-token systems
