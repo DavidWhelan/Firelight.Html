@@ -1,8 +1,8 @@
-namespace Fable.Lit.Dsl
+namespace Firelight.Html
 
 open Fable.Core
 open Fable.Core.JsInterop
-open Lit
+open Firelight
 
 /// Internal JavaScript interop for Lit template construction.
 module internal JsInterop =
@@ -13,15 +13,15 @@ module internal JsInterop =
 
     /// Calls a tagged template function with string parts and values.
     [<Emit("$0($1, ...$2)")>]
-    let callTagFn (tagFn: obj) (strings: obj) (values: obj[]) : TemplateResult = jsNative
+    let callTagFn (tagFn: obj) (strings: obj) (values: obj[]) : ChildRenderable = jsNative
 
     /// The Lit html tag function.
     [<Import("html", "lit")>]
-    let htmlTagFn : obj = jsNative
+    let htmlTagFn: obj = jsNative
 
-    /// Creates an empty TemplateResult (Lit.nothing equivalent).
+    /// Creates an empty ChildRenderable (Lit.nothing equivalent).
     [<Emit("$0``")>]
-    let emptyTemplate (tagFn: obj) : TemplateResult = jsNative
+    let emptyTemplate (tagFn: obj) : ChildRenderable = jsNative
 
     /// JavaScript Map for caching template strings.
     [<Emit("new Map()")>]
@@ -41,6 +41,7 @@ module internal TemplateCache =
     /// Gets or creates a cached template strings array for the given strings.
     let getTemplateStrings (strings: string list) : obj =
         let key = String.concat "\u0000" strings
+
         match JsInterop.mapGet cache key with
         | Some cached -> cached
         | None ->
@@ -48,13 +49,13 @@ module internal TemplateCache =
             JsInterop.mapSet cache key templateStrings
             templateStrings
 
-/// Converts DSL Nodes to Lit TemplateResults.
+/// Converts DSL Nodes to Lit ChildRenderables.
 [<RequireQualifiedAccess>]
 module Renderer =
 
     /// Creates a Lit template from string parts and interpolated values.
     /// Uses cached template strings to ensure Lit can efficiently diff templates.
-    let private createTemplate (strings: string list) (values: obj list) : TemplateResult =
+    let private createTemplate (strings: string list) (values: obj list) : ChildRenderable =
         let templateStrings = TemplateCache.getTemplateStrings strings
         JsInterop.callTagFn JsInterop.htmlTagFn templateStrings (List.toArray values)
 
@@ -63,11 +64,10 @@ module Renderer =
     /// and the template (and therefore the DOM) is reused when only the values change.
     let private renderAttrString (attr: Attr) : string * obj option =
         match attr with
-        | Attr(name, value) ->
-            $" {name}=", Some value
+        | Attr(name, value) -> $" {name}=", Some value
         | BoolAttr(name, enabled) ->
             // Lit's boolean attribute binding adds/removes the attribute
-            $" ?{name}=", Some (box enabled)
+            $" ?{name}=", Some(box enabled)
         | Prop(name, value) ->
             // Property bindings use Lit's .property=${value} syntax
             $" .{name}=", Some value
@@ -78,7 +78,7 @@ module Renderer =
             // Ref bindings use Lit's built-in ref directive.
             // The callback receives the element (or undefined when disconnected).
             // Empty string ensures proper element position binding.
-            let refDirective = LitBindings.ref setter
+            let refDirective = Lit.ref setter
             "", Some refDirective
 
     /// Renders a list of attributes, returning the static string parts and dynamic values.
@@ -88,23 +88,23 @@ module Renderer =
             | [] -> List.rev strings, List.rev values
             | attr :: restAttrs ->
                 let str, valueOpt = renderAttrString attr
+
                 match valueOpt with
                 | None ->
                     // Static attribute - append to current string
                     match strings with
                     | current :: restStrings -> loop restAttrs ((current + str) :: restStrings) values
-                    | [] -> loop restAttrs [str] values
+                    | [] -> loop restAttrs [ str ] values
                 | Some value ->
                     // Dynamic attribute - add placeholder and value
                     match strings with
-                    | current :: restStrings ->
-                        loop restAttrs ("" :: (current + str) :: restStrings) (value :: values)
-                    | [] ->
-                        loop restAttrs [""; str] (value :: values)
-        loop attrs [""] []
+                    | current :: restStrings -> loop restAttrs ("" :: (current + str) :: restStrings) (value :: values)
+                    | [] -> loop restAttrs [ ""; str ] (value :: values)
 
-    /// Renders a Node to a TemplateResult.
-    let rec render (node: Node) : TemplateResult =
+        loop attrs [ "" ] []
+
+    /// Renders a Node to a ChildRenderable.
+    let rec render (node: Node) : ChildRenderable =
         match node with
         | Text t ->
             // Pass the string itself as the value so Lit renders it as escaped text
@@ -112,10 +112,10 @@ module Renderer =
 
         | RawHtml raw ->
             // Use Lit's unsafeHTML directive
-            LitBindings.unsafeHTML raw
+            Lit.unsafeHTML raw
 
         | Template t ->
-            // Already a TemplateResult, pass through
+            // Already a ChildRenderable, pass through
             t
 
         | Fragment nodes ->
@@ -123,15 +123,12 @@ module Renderer =
             // so the enclosing template doesn't change when the item count does.
             nodes |> List.map render |> List.toArray |> unbox
 
-        | Sequence [] ->
-            Lit.nothing
+        | Sequence [] -> Lit.nothing
 
         | Sequence nodes ->
             // One slot per statement; the strings depend only on the statement count,
             // which is fixed by the shape of the code.
-            createTemplate
-                ([ "" ] @ List.replicate (nodes.Length - 1) "" @ [ "" ])
-                (nodes |> List.map (render >> box))
+            createTemplate ([ "" ] @ List.replicate (nodes.Length - 1) "" @ [ "" ]) (nodes |> List.map (render >> box))
 
         | AttrNode _ ->
             // AttrNodes should be filtered out before rendering
@@ -141,21 +138,26 @@ module Renderer =
             // Empty node
             Lit.nothing
 
-        | Element(tag, attrs, children) ->
-            renderElement tag attrs children
+        | Element(tag, attrs, children) -> renderElement tag attrs children
 
     /// Renders an element node with its attributes and children.
-    and private renderElement (tag: string) (attrs: Attr list) (children: Node list) : TemplateResult =
+    and private renderElement (tag: string) (attrs: Attr list) (children: Node list) : ChildRenderable =
         // Build the template strings and values
         // Pattern: ["<tag ", " attrs>", "", ..., "</tag>"] with ref directive first in element position
 
         // Separate ref directives from other attributes (refs must be in element position, before other attrs)
-        let refs, otherAttrs = attrs |> List.partition (function Ref _ -> true | _ -> false)
+        let refs, otherAttrs =
+            attrs
+            |> List.partition (function
+                | Ref _ -> true
+                | _ -> false)
 
         // Get ref directive values (rendered refs return empty string, so we just need the values)
-        let refValues = refs |> List.choose (function
-            | Ref setter -> Some (LitBindings.ref setter :> obj)
-            | _ -> None)
+        let refValues =
+            refs
+            |> List.choose (function
+                | Ref setter -> Some(Lit.ref setter :> obj)
+                | _ -> None)
 
         // Render other attributes
         let attrStrings, attrValues = renderAttrs otherAttrs
@@ -165,47 +167,39 @@ module Renderer =
 
         // Build the complete template with refs in element position (right after tag name)
         match refValues, attrStrings, attrValues, renderedChildren with
-        | [], [attrStr], [], [] ->
+        | [], [ attrStr ], [], [] ->
             // No refs, no dynamic attrs, no children: simple static element
             let template = $"<{tag}{attrStr}></{tag}>"
-            createTemplate [template] []
+            createTemplate [ template ] []
 
-        | [], [attrStr], [], children ->
+        | [], [ attrStr ], [], children ->
             // No refs, no dynamic attrs, with children
             let openTag = $"<{tag}{attrStr}>"
             let closeTag = $"</{tag}>"
-            let strings = [openTag] @ List.replicate (children.Length - 1) "" @ [closeTag]
+            let strings = [ openTag ] @ List.replicate (children.Length - 1) "" @ [ closeTag ]
             createTemplate strings (children |> List.map box)
 
         | [], attrStrs, attrVals, [] ->
             // No refs, dynamic attrs, no children
-            let openParts = attrStrs |> List.mapi (fun i s ->
-                if i = 0 then $"<{tag}{s}"
-                else s
-            )
+            let openParts = attrStrs |> List.mapi (fun i s -> if i = 0 then $"<{tag}{s}" else s)
             let lastIdx = openParts.Length - 1
+
             let openParts' =
-                openParts |> List.mapi (fun i s ->
-                    if i = lastIdx then s + $"></{tag}>"
-                    else s
-                )
+                openParts |> List.mapi (fun i s -> if i = lastIdx then s + $"></{tag}>" else s)
+
             createTemplate openParts' attrVals
 
         | [], attrStrs, attrVals, children ->
             // No refs, dynamic attrs and children
-            let openParts = attrStrs |> List.mapi (fun i s ->
-                if i = 0 then $"<{tag}{s}"
-                else s
-            )
+            let openParts = attrStrs |> List.mapi (fun i s -> if i = 0 then $"<{tag}{s}" else s)
             let lastIdx = openParts.Length - 1
+
             let openParts' =
-                openParts |> List.mapi (fun i s ->
-                    if i = lastIdx then s + ">"
-                    else s
-                )
+                openParts |> List.mapi (fun i s -> if i = lastIdx then s + ">" else s)
+
             let closeTag = $"</{tag}>"
             let childStrings = List.replicate (children.Length - 1) ""
-            let allStrings = openParts' @ childStrings @ [closeTag]
+            let allStrings = openParts' @ childStrings @ [ closeTag ]
             let allValues = attrVals @ (children |> List.map box)
             createTemplate allStrings allValues
 
@@ -216,37 +210,41 @@ module Renderer =
             let openTag = $"<{tag} "
 
             // Build attribute parts
-            let attrParts = attrStrs |> List.mapi (fun i s ->
-                if i = 0 then s  // First attr string (may be empty or have static attrs)
-                else s
-            )
+            let attrParts =
+                attrStrs
+                |> List.mapi (fun i s ->
+                    if i = 0 then
+                        s // First attr string (may be empty or have static attrs)
+                    else
+                        s)
 
             // Combine: "<tag " + ref placeholders + attr parts + children + "</tag>"
             let lastAttrIdx = attrParts.Length - 1
+
             let attrParts' =
                 if children.Length = 0 then
-                    attrParts |> List.mapi (fun i s ->
-                        if i = lastAttrIdx then s + $"></{tag}>"
-                        else s
-                    )
+                    attrParts
+                    |> List.mapi (fun i s -> if i = lastAttrIdx then s + $"></{tag}>" else s)
                 else
-                    attrParts |> List.mapi (fun i s ->
-                        if i = lastAttrIdx then s + ">"
-                        else s
-                    )
+                    attrParts |> List.mapi (fun i s -> if i = lastAttrIdx then s + ">" else s)
 
             let closeTag = $"</{tag}>"
             let childCount = List.length children
-            let childStrings = if childCount > 1 then List.replicate (childCount - 1) "" else []
+
+            let childStrings =
+                if childCount > 1 then
+                    List.replicate (childCount - 1) ""
+                else
+                    []
 
             let allStrings =
                 if childCount = 0 then
-                    [openTag] @ refPlaceholders @ attrParts'
+                    [ openTag ] @ refPlaceholders @ attrParts'
                 else
-                    [openTag] @ refPlaceholders @ attrParts' @ childStrings @ [closeTag]
+                    [ openTag ] @ refPlaceholders @ attrParts' @ childStrings @ [ closeTag ]
 
             let allValues = refVals @ attrVals @ (children |> List.map box)
             createTemplate allStrings allValues
 
-    /// Renders a Node to a TemplateResult (alias for render).
-    let toTemplateResult = render
+    /// Renders a Node to a ChildRenderable (alias for render).
+    let toChildRenderable = render

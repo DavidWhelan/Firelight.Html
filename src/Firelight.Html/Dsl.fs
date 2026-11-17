@@ -1,6 +1,6 @@
-namespace Fable.Lit.Dsl
+namespace Firelight.Html
 
-open Lit
+open Firelight
 
 // =============================================================================
 // Computation Expression Builders
@@ -13,7 +13,7 @@ module internal BuilderHelpers =
     /// `b` is either the rest of the body (a Sequence) or the final statement.
     let combine (a: Node) (b: Node) : Node =
         match b with
-        | Sequence rest -> Sequence (a :: rest)
+        | Sequence rest -> Sequence(a :: rest)
         | _ -> Sequence [ a; b ]
 
     /// Separates attributes (at any depth of loops and conditionals) from child nodes.
@@ -27,41 +27,32 @@ module internal BuilderHelpers =
         | AttrNode attr -> [ attr ], None
         | Fragment nodes ->
             let attrs, rest = splitAttrs nodes
-            attrs, Some (Fragment rest)
+            attrs, Some(Fragment rest)
         | Sequence nodes ->
             let attrs, rest = splitAttrs nodes
-            attrs, Some (Sequence rest)
+            attrs, Some(Sequence rest)
         | other -> [], Some other
 
 /// Builder for creating HTML element nodes.
 type ElementBuilder(tag: string) =
 
-    member _.Yield(text: string) : Node =
-        Text text
+    member _.Yield(text: string) : Node = Text text
 
-    member _.Yield(node: Node) : Node =
-        node
+    member _.Yield(node: Node) : Node = node
 
-    member _.Yield(attr: Attr) : Node =
-        AttrNode attr
+    member _.Yield(attr: Attr) : Node = AttrNode attr
 
-    member _.Yield(template: TemplateResult) : Node =
-        Template template
+    member _.Yield(template: ChildRenderable) : Node = Template template
 
-    member _.Yield(()) : Node =
-        Nothing
+    member _.Yield(()) : Node = Nothing
 
-    member _.YieldFrom(nodes: Node seq) : Node =
-        nodes |> Seq.toList |> Fragment
+    member _.YieldFrom(nodes: Node seq) : Node = nodes |> Seq.toList |> Fragment
 
-    member _.Combine(a: Node, b: Node) : Node =
-        BuilderHelpers.combine a b
+    member _.Combine(a: Node, b: Node) : Node = BuilderHelpers.combine a b
 
-    member _.Delay(f: unit -> Node) : Node =
-        f()
+    member _.Delay(f: unit -> Node) : Node = f ()
 
-    member _.Zero() : Node =
-        Nothing
+    member _.Zero() : Node = Nothing
 
     member _.For(xs: 'T seq, f: 'T -> Node) : Node =
         xs |> Seq.map f |> Seq.toList |> Fragment
@@ -75,6 +66,7 @@ type ElementBuilder(tag: string) =
             match content with
             | Sequence nodes -> nodes
             | node -> [ node ]
+
         let attrs, children = BuilderHelpers.splitAttrs statements
         Element(tag, attrs, children)
 
@@ -82,32 +74,23 @@ type ElementBuilder(tag: string) =
 /// Returns a Node for use in nested contexts.
 type TemplateBuilder() =
 
-    member _.Yield(text: string) : Node =
-        Text text
+    member _.Yield(text: string) : Node = Text text
 
-    member _.Yield(node: Node) : Node =
-        node
+    member _.Yield(node: Node) : Node = node
 
-    member _.Yield(attr: Attr) : Node =
-        AttrNode attr
+    member _.Yield(attr: Attr) : Node = AttrNode attr
 
-    member _.Yield(t: TemplateResult) : Node =
-        Template t
+    member _.Yield(t: ChildRenderable) : Node = Template t
 
-    member _.Yield(()) : Node =
-        Nothing
+    member _.Yield(()) : Node = Nothing
 
-    member _.YieldFrom(nodes: Node seq) : Node =
-        nodes |> Seq.toList |> Fragment
+    member _.YieldFrom(nodes: Node seq) : Node = nodes |> Seq.toList |> Fragment
 
-    member _.Combine(a: Node, b: Node) : Node =
-        BuilderHelpers.combine a b
+    member _.Combine(a: Node, b: Node) : Node = BuilderHelpers.combine a b
 
-    member _.Delay(f: unit -> Node) : Node =
-        f()
+    member _.Delay(f: unit -> Node) : Node = f ()
 
-    member _.Zero() : Node =
-        Nothing
+    member _.Zero() : Node = Nothing
 
     member _.For(xs: 'T seq, f: 'T -> Node) : Node =
         xs |> Seq.map f |> Seq.toList |> Fragment
@@ -118,13 +101,12 @@ type TemplateBuilder() =
         | Sequence nodes -> Fragment nodes
         | other -> other
 
-/// Builder for creating views that auto-render to TemplateResult.
+/// Builder for creating views that auto-render to ChildRenderable.
 /// Use this at the top level of components.
 type ViewBuilder() =
     inherit TemplateBuilder()
 
-    member _.Run(content: Node) : TemplateResult =
-        Renderer.render content
+    member _.Run(content: Node) : ChildRenderable = Renderer.render content
 
 // =============================================================================
 // DSL Entry Points
@@ -136,7 +118,7 @@ module HtmlDsl =
     /// Use this for nested fragments inside elements.
     let template = TemplateBuilder()
 
-    /// Creates a view that auto-renders to TemplateResult.
+    /// Creates a view that auto-renders to ChildRenderable.
     /// Use this at the top level of components.
     let view = ViewBuilder()
 
@@ -274,31 +256,25 @@ module Elements =
 [<AutoOpen>]
 module Attrs =
     /// Creates a generic attribute.
-    let attr (name: string) (value: obj) : Attr =
-        Attr(name, value)
+    let attr (name: string) (value: obj) : Attr = Attr(name, value)
 
     /// Creates a boolean attribute (present when true, absent when false).
-    let boolAttr (name: string) (enabled: bool) : Attr =
-        BoolAttr(name, enabled)
+    let boolAttr (name: string) (enabled: bool) : Attr = BoolAttr(name, enabled)
 
     /// Creates a property binding (Lit's .property=${value} syntax).
-    let prop (name: string) (value: obj) : Attr =
-        Attr.Prop(name, value)
+    let prop (name: string) (value: obj) : Attr = Attr.Prop(name, value)
 
     /// Creates an event handler attribute (Lit's @event=${handler} syntax).
-    let on (eventName: string) (handler: Browser.Types.Event -> unit) : Attr =
-        Event(eventName, handler)
+    let on (eventName: string) (handler: Browser.Types.Event -> unit) : Attr = Event(eventName, handler)
 
     // Common attributes
     let id (value: string) : Attr = Attr("id", value)
     let class' (value: string) : Attr = Attr("class", value)
+
     let classList (classes: (string * bool) list) : Attr =
-        let value =
-            classes
-            |> List.filter snd
-            |> List.map fst
-            |> String.concat " "
+        let value = classes |> List.filter snd |> List.map fst |> String.concat " "
         Attr("class", value)
+
     let style (value: string) : Attr = Attr("style", value)
     let href (value: string) : Attr = Attr("href", value)
     let src (value: string) : Attr = Attr("src", value)
@@ -343,9 +319,16 @@ module Attrs =
     let role (value: string) : Attr = Attr("role", value)
     let ariaLabel (value: string) : Attr = Attr("aria-label", value)
     let ariaDescribedby (value: string) : Attr = Attr("aria-describedby", value)
-    let ariaHidden (value: bool) : Attr = Attr("aria-hidden", if value then "true" else "false")
-    let ariaExpanded (value: bool) : Attr = Attr("aria-expanded", if value then "true" else "false")
-    let ariaSelected (value: bool) : Attr = Attr("aria-selected", if value then "true" else "false")
+
+    let ariaHidden (value: bool) : Attr =
+        Attr("aria-hidden", if value then "true" else "false")
+
+    let ariaExpanded (value: bool) : Attr =
+        Attr("aria-expanded", if value then "true" else "false")
+
+    let ariaSelected (value: bool) : Attr =
+        Attr("aria-selected", if value then "true" else "false")
+
     let ariaControls (value: string) : Attr = Attr("aria-controls", value)
 
     // Data attributes
@@ -360,31 +343,20 @@ module Attrs =
     let muted (value: bool) : Attr = BoolAttr("muted", value)
 
     // Common event handlers
-    let onClick (handler: Browser.Types.MouseEvent -> unit) : Attr =
-        Event("click", handler)
-    let onInput (handler: Browser.Types.Event -> unit) : Attr =
-        Event("input", handler)
-    let onChange (handler: Browser.Types.Event -> unit) : Attr =
-        Event("change", handler)
-    let onSubmit (handler: Browser.Types.Event -> unit) : Attr =
-        Event("submit", handler)
-    let onKeyDown (handler: Browser.Types.KeyboardEvent -> unit) : Attr =
-        Event("keydown", handler)
-    let onKeyUp (handler: Browser.Types.KeyboardEvent -> unit) : Attr =
-        Event("keyup", handler)
-    let onFocus (handler: Browser.Types.FocusEvent -> unit) : Attr =
-        Event("focus", handler)
-    let onBlur (handler: Browser.Types.FocusEvent -> unit) : Attr =
-        Event("blur", handler)
-    let onMouseEnter (handler: Browser.Types.MouseEvent -> unit) : Attr =
-        Event("mouseenter", handler)
-    let onMouseLeave (handler: Browser.Types.MouseEvent -> unit) : Attr =
-        Event("mouseleave", handler)
+    let onClick (handler: Browser.Types.MouseEvent -> unit) : Attr = Event("click", handler)
+    let onInput (handler: Browser.Types.Event -> unit) : Attr = Event("input", handler)
+    let onChange (handler: Browser.Types.Event -> unit) : Attr = Event("change", handler)
+    let onSubmit (handler: Browser.Types.Event -> unit) : Attr = Event("submit", handler)
+    let onKeyDown (handler: Browser.Types.KeyboardEvent -> unit) : Attr = Event("keydown", handler)
+    let onKeyUp (handler: Browser.Types.KeyboardEvent -> unit) : Attr = Event("keyup", handler)
+    let onFocus (handler: Browser.Types.FocusEvent -> unit) : Attr = Event("focus", handler)
+    let onBlur (handler: Browser.Types.FocusEvent -> unit) : Attr = Event("blur", handler)
+    let onMouseEnter (handler: Browser.Types.MouseEvent -> unit) : Attr = Event("mouseenter", handler)
+    let onMouseLeave (handler: Browser.Types.MouseEvent -> unit) : Attr = Event("mouseleave", handler)
 
     /// Creates a ref binding that captures the DOM element after rendering.
     /// The callback receives the element when attached (or undefined when detached).
-    let bindRef (setter: obj -> unit) : Attr =
-        Ref setter
+    let bindRef (setter: obj -> unit) : Attr = Ref setter
 
 // =============================================================================
 // Interop Helpers
@@ -392,23 +364,19 @@ module Attrs =
 
 [<AutoOpen>]
 module LitInterop =
-    /// Embeds an existing Lit TemplateResult inside the DSL.
-    let lit (t: TemplateResult) : Node =
-        Template t
+    /// Embeds an existing Lit ChildRenderable inside the DSL.
+    let lit (t: ChildRenderable) : Node = Template t
 
     /// Embeds raw HTML (rendered via Lit's unsafeHTML).
-    let rawHtml (s: string) : Node =
-        RawHtml s
+    let rawHtml (s: string) : Node = RawHtml s
 
     /// Creates a text node.
-    let text (s: string) : Node =
-        Text s
+    let text (s: string) : Node = Text s
 
     /// Creates a fragment from a list of nodes.
-    let fragment (nodes: Node list) : Node =
-        Fragment nodes
+    let fragment (nodes: Node list) : Node = Fragment nodes
 
     /// Renders a list keyed by `getKey` (Lit's `repeat` directive): each item's DOM is kept
     /// and moved when items are inserted, removed or reordered, instead of being diffed by position.
-    let forKeyed (getKey: 'T -> string) (items: 'T seq) (render: 'T -> Node) : Node =
-        Template (Lit.mapUnique getKey (render >> Renderer.render) items)
+    let forKeyed (items: 'T seq) (getKey: 'T -> 'K) (template: 'T -> Node) : Node =
+        Template(Lit.repeat (items, getKey, (template >> Renderer.render)))

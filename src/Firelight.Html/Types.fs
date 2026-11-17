@@ -1,6 +1,7 @@
-namespace Fable.Lit.Dsl
+namespace Firelight.Html
 
-open Lit
+open Firelight
+open System
 
 // =============================================================================
 // AST Types (renderer-agnostic)
@@ -24,6 +25,6 @@ type Node =
     /// Produced by the builders' Combine so that a parent's template stays stable across renders.
     | Sequence of Node list
     | RawHtml of string
-    | Template of TemplateResult
+    | Template of ChildRenderable
     | AttrNode of Attr
     | Nothing
