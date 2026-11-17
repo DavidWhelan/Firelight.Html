@@ -11,7 +11,7 @@ A collection of expressive, type-safe DSLs for building UI with **Firelight**.
 Add the packages to your project:
 
 ```bash
-dotnet add package DavidWhelan.Firelight.Html
+dotnet add package Firelight.Html
 ```
 ---
 
