@@ -17,7 +17,7 @@ dotnet add package Firelight.Html
 
 # HTML DSL
 
-The HTML DSL provides a natural, structured way to write Lit templates in F# without stringly-typed markup.
+The HTML DSL provides a natural, structured way to write Lit templates in F# without stringly-typed markup. Instead of using ```html``` from Firelight the view computation expression can be used instead in the components render function
 
 ### Example
 
